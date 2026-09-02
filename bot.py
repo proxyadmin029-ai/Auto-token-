@@ -60,7 +60,7 @@ BOT_NAME = "<b>𝗔𝗡𝗬 𝗔𝗨𝗧𝗢 𝗕𝗢𝗧</b>"
 # FORCE JOIN CHANNEL
 # ============================
 CHANNEL_USERNAME = "@Ro999itoekng"
-CHANNEL_URL = "https://t.me/+MIgVVTfH2-w4Y2U1
+CHANNEL_URL = "https://t.me/+MIgVVTfH2-w4Y2U1"
 
 # ============================
 # USER CONFIG – PERSISTENT VOLUME FIX
