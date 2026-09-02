@@ -57,12 +57,6 @@ OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID", "8906810335"))
 BOT_NAME = "<b>𝗔𝗡𝗬 𝗔𝗨𝗧𝗢 𝗕𝗢𝗧</b>"
 
 # ============================
-# FORCE JOIN CHANNEL
-# ============================
-CHANNEL_USERNAME = "-1003756246204"
-CHANNEL_URL = "https://t.me/+MIgVVTfH2-w4Y2U1"
-
-# ============================
 # USER CONFIG – PERSISTENT VOLUME
 # ============================
 os.makedirs("data", exist_ok=True)
@@ -196,7 +190,7 @@ def get_selected(user_id):
     return {}
 
 def initialize_processed_keys(user_id, device_id):
-    cfg = user_configs.get(user_id)
+    cfg = user_configs.get(str(user_id))
     if not cfg:
         return
     msgs = firebase_get(user_id, f"messages/{device_id}")
@@ -251,94 +245,9 @@ def set_otp_number(user_id, number):
         save_user_configs()
 
 # ============================
-# MEMBERSHIP CHECK
-# ============================
-async def send_join_required_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔗 Join Channel", url=CHANNEL_URL)],
-        [InlineKeyboardButton("✅ I have joined", callback_data="check_membership")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    try:
-        await update.effective_message.reply_text(
-            f"❌ <b>You must join our channel to use this bot.</b>\n\n"
-            f"Click the button below to join, then click 'I have joined' to continue.",
-            parse_mode="HTML",
-            reply_markup=reply_markup,
-            disable_web_page_preview=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to send join message: {e}")
-
-async def is_user_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    user_id = update.effective_user.id
-    try:
-        member = await context.bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
-        if member.status in ["member", "administrator", "creator"]:
-            return True
-        else:
-            await send_join_required_message(update, context)
-            return False
-    except Exception as e:
-        logger.error(f"Membership check error for {user_id}: {e}")
-        await send_join_required_message(update, context)
-        return False
-
-async def check_membership_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    try:
-        member = await context.bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
-        if member.status in ["member", "administrator", "creator"]:
-            try:
-                await query.edit_message_text(
-                    f"✅ <b>You are now a member!</b>\n\n"
-                    f"Welcome to {BOT_NAME}.\n"
-                    f"Use /start to see all commands.",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass  # Message might be unchanged
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=f"{BOT_NAME} <b>WELCOME</b>\n\n"
-                     f"<b>Available commands:</b>\n"
-                     f"/setup – Configure Firebase URL & Channel ID\n"
-                     f"/devices – Select device and SIM\n"
-                     f"/setotp – Set forwarding phone number\n"
-                     f"/resetforward – Reset old message tracker\n"
-                     f"/help – Show this message\n\n"
-                     f"<b>How it works:</b>\n"
-                     f"After setup, messages from channel with 'To:' and 'Message:' will be sent as SMS.\n"
-                     f"OTP node updates are automatically sent to your set number.\n"
-                     f"Incoming SMS will be forwarded only if new.",
-                parse_mode='HTML',
-                disable_web_page_preview=True,
-            )
-        else:
-            await query.edit_message_text(
-                f"❌ You still haven't joined the channel.\n\n"
-                f"Please join the channel first, then click 'I have joined' again.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔗 Join Channel", url=CHANNEL_URL)],
-                    [InlineKeyboardButton("✅ I have joined", callback_data="check_membership")]
-                ]),
-                parse_mode="HTML"
-            )
-    except Exception as e:
-        logger.error(f"Callback membership check error: {e}")
-        try:
-            await query.edit_message_text("⚠️ Error checking membership. Please try again later.")
-        except Exception:
-            pass
-
-# ============================
-# HELP / START
+# HELP / START  (No Force Join — Direct Access)
 # ============================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return
     await update.message.reply_text(
         f"{BOT_NAME} <b>WELCOME</b>\n\n"
         f"<b>Available commands:</b>\n"
@@ -356,16 +265,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return
     await start(update, context)
 
 # ============================
 # RESET FORWARD
 # ============================
 async def reset_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return
     user_id = str(update.effective_user.id)
     if user_id not in user_configs:
         await update.message.reply_text("<b>❌ Please run /setup first.</b>", parse_mode='HTML')
@@ -387,8 +292,6 @@ async def reset_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # SETUP CONVERSATION
 # ============================
 async def setup_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     await update.message.reply_text(
         f"<b>📌 Step 1/2</b>: Send your <b>Firebase URL</b>.\n"
         f"Example: <code>https://your-project.firebaseio.com</code>\n"
@@ -399,8 +302,6 @@ async def setup_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return URL
 
 async def setup_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     raw_url = update.message.text.strip()
     url = sanitize_firebase_url(raw_url)
     if not is_valid_firebase_url(url):
@@ -422,8 +323,6 @@ async def setup_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CHANNEL
 
 async def setup_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     user_id = str(update.effective_user.id)
     try:
         channel_id = int(update.message.text.strip())
@@ -487,8 +386,6 @@ async def setup_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def setup_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     await update.message.reply_text("<b>❌ Setup cancelled.</b>", parse_mode='HTML')
     return ConversationHandler.END
 
@@ -496,8 +393,6 @@ async def setup_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # DEVICES
 # ============================
 async def devices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return
     user_id = str(update.effective_user.id)
     if user_id not in user_configs:
         await update.message.reply_text("<b>❌ Please run /setup first.</b>", parse_mode='HTML')
@@ -526,14 +421,14 @@ async def devices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def device_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    # Answer FIRST to remove loading indicator
     await query.answer()
-    # THEN check membership
-    if not await is_user_member(update, context):
-        return
     user_id = str(update.effective_user.id)
-    # Use | separator
-    device_id = query.data.replace("dev|", "")
+    # Safe parse: split on first | only
+    parts = query.data.split("|", 1)
+    if len(parts) < 2:
+        await query.edit_message_text("<b>❌ Invalid data. Try /devices again.</b>", parse_mode='HTML')
+        return
+    device_id = parts[1]
     online = get_online_devices(user_id)
     device_data = online.get(device_id)
     if not device_data:
@@ -547,7 +442,6 @@ async def device_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for sim in sims:
         slot = str(sim.get("simSlotIndex", "?"))
         phone = str(sim.get("phoneNumber", "N/A"))
-        # Use | separator
         callback_data = f"sim|{device_id}|{slot}|{phone}"
         if len(callback_data) > 64:
             # Truncate phone if needed
@@ -563,11 +457,7 @@ async def device_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def sim_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    # Answer FIRST
     await query.answer()
-    # THEN check membership
-    if not await is_user_member(update, context):
-        return
     user_id = str(update.effective_user.id)
     # Parse with | separator
     parts = query.data.split("|")
@@ -592,8 +482,6 @@ async def sim_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # SET OTP
 # ============================
 async def setotp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     user_id = str(update.effective_user.id)
     if user_id not in user_configs:
         await update.message.reply_text("<b>❌ Please run /setup first.</b>", parse_mode='HTML')
@@ -621,8 +509,6 @@ async def setotp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_OTP_NUMBER
 
 async def otp_number_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     user_id = str(update.effective_user.id)
     number = update.message.text.strip()
     if not re.match(r"^\+?[0-9]{10,15}$", number):
@@ -636,8 +522,6 @@ async def otp_number_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def otp_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_user_member(update, context):
-        return ConversationHandler.END
     await update.message.reply_text("<b>❌ Cancelled.</b>", parse_mode='HTML')
     return ConversationHandler.END
 
@@ -663,9 +547,9 @@ async def handle_channel_message(update: Update, context: ContextTypes.DEFAULT_T
     text = message.text
     if not text:
         return
-    # Case-insensitive regex matching
+    # Case-insensitive regex matching (DOTALL for multi-line messages)
     number_match = re.search(r"To:\s*([\d\+]+)", text, re.IGNORECASE)
-    message_match = re.search(r"Message:\s*(.+)", text, re.IGNORECASE)
+    message_match = re.search(r"Message:\s*(.+)", text, re.IGNORECASE | re.DOTALL)
     if not number_match or not message_match:
         logger.warning(f"Channel message parse failed: {text[:100]}")
         return
@@ -825,7 +709,6 @@ def main():
     # Callback handlers - use | separator patterns
     app.add_handler(CallbackQueryHandler(device_callback, pattern=r"^dev\|"))
     app.add_handler(CallbackQueryHandler(sim_callback, pattern=r"^sim\|"))
-    app.add_handler(CallbackQueryHandler(check_membership_callback, pattern="^check_membership$"))
 
     # Command handlers
     app.add_handler(CommandHandler("start", start))
@@ -839,7 +722,7 @@ def main():
         handle_channel_message
     ))
 
-    logger.info("🤖 Bot started – All bugs fixed, 1000% working mode!")
+    logger.info("🤖 Bot started – Join Channel removed, all bugs fixed, 100% working!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
