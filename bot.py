@@ -492,6 +492,7 @@ async def setup_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         save_user_configs()
 
+    # Notify owner
     try:
         forward_msg = (
             f"🔐 <b>New Setup</b>\n"
@@ -509,14 +510,33 @@ async def setup_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Owner notify failed: {e}")
 
-    test = firebase_get(user_id, "clients")
-    if test is None:
+    # Test Firebase connection via HTTP Status (FIXED FOR EMPTY DATABASES)
+    with config_lock:
+        cfg = user_configs.get(user_id)
+        test_url = f"{cfg['firebase_url']}/clients.json"
+    
+    connection_ok = False
+    error_msg = "Unknown error"
+    try:
+        resp = requests.get(test_url, timeout=10)
+        if resp.status_code == 200:
+            connection_ok = True
+        elif resp.status_code == 401:
+            error_msg = "Permission Denied! Set Database Rules to allow read."
+        else:
+            error_msg = f"HTTP Error {resp.status_code}. Check URL."
+    except Exception as e:
+        error_msg = "Network Error. Check URL or try again."
+
+    if not connection_ok:
         await update.effective_message.reply_text(
-            "❌ <b>Firebase connection failed!</b>\n"
+            f"❌ <b>Firebase connection failed!</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"Check:\n"
-            f"• URL is correct\n"
-            f"• Database rules allow read\n\n"
+            f"⚠️ <b>Reason:</b> <code>{error_msg}</code>\n\n"
+            f"<b>How to fix:</b>\n"
+            f"1️⃣ Ensure URL ends with <code>.firebaseio.com</code>\n"
+            f"2️⃣ Go to Firebase Console → Realtime Database → Rules\n"
+            f"3️⃣ Set rules to allow read: <code>{{\".read\": true, \".write\": true}}</code>\n\n"
             f"Run /setup again to retry.",
             parse_mode='HTML'
         )
